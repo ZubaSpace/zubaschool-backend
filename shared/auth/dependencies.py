@@ -1,17 +1,33 @@
 from fastapi import Header, HTTPException, Depends
-from supabase import create_client, Client
+from supabase import Client
+import jwt
 import os
+from .supabase import get_supabase_client
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
 
-async def get_current_user(authorization: str = Header(...)):
-    # Simplified for learning; in production, validate JWT
-    # Assume token contains user_id and role
+async def get_current_user(authorization: str = Header(...), supabase: Client = Depends(get_supabase_client)):
+    """
+    Validate JWT and return user data with role.
+    """
     try:
+        if not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Invalid token format")
+        
         token = authorization.replace("Bearer ", "")
-        # For now, return a mock user (replace with real JWT validation later)
-        return {"id": "550e8400-e29b-41d4-a716-446655440000", "email": "sysadmin@zubaschool.com", "role": "sysadmin"}
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+        decoded = jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"])
+        
+        user_id = decoded.get("sub")
+        role = decoded.get("role")
+        
+        if not user_id or not role:
+            raise HTTPException(status_code=401, detail="Invalid token payload")
+        
+        if role != "sysadmin":
+            raise HTTPException(status_code=403, detail="System admin access required")
+        
+        return {"id": user_id, "email": decoded.get("email"), "role": role}
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
