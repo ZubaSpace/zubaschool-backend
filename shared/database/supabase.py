@@ -1,10 +1,15 @@
 from supabase import create_client, Client
-from ..config import SUPABASE_URL, SUPABASE_KEY
+import os
 
-# Initialize Supabase client
-supabase: Client = None
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-if SUPABASE_URL and SUPABASE_KEY:
-    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-else:
-    print("Warning: Supabase credentials not found. Please check your .env file.")
+def get_supabase_client(jwt: str = None) -> Client:
+    """
+    Create a Supabase client with optional JWT for user context.
+    """
+    client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    if jwt:
+        client.postgrest.auth(jwt)
+    return client
